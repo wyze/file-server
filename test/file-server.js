@@ -1,19 +1,19 @@
 
 var fs = require('fs')
-var koa = require('koa')
+var Koa = require('koa')
 var path = require('path')
 var assert = require('assert')
 var request = require('supertest')
 
 var staticServer = require('..')
 
-var app = koa()
+var app = new Koa()
 app.use(staticServer())
 var server = app.listen()
 
 describe('root', function () {
   it('should root priority than options.root', function (done) {
-    var app = koa()
+    var app = new Koa()
     app.use(staticServer(__dirname, {
       root: path.dirname(__dirname)
     }))
@@ -25,7 +25,7 @@ describe('root', function () {
   })
 
   it('should options.root work', function (done) {
-    var app = koa()
+    var app = new Koa()
     app.use(staticServer({
       root: __dirname
     }))
@@ -101,7 +101,7 @@ describe('headers', function () {
   })
 
   it('should set cache-control with maxage', function (done) {
-    var app = koa()
+    var app = new Koa()
     app.use(staticServer({
       maxage: 1000
     }))
@@ -130,7 +130,7 @@ describe('index files', function (done) {
   })
 
   it('should be served when enabled', function (done) {
-    var app = koa()
+    var app = new Koa()
     app.use(staticServer({
       index: true
     }))
@@ -151,7 +151,7 @@ describe('hidden files', function () {
   })
 
   it('should be served when enabled', function (done) {
-    var app = koa()
+    var app = new Koa()
     app.use(staticServer({
       hidden: true
     }))
@@ -208,27 +208,10 @@ describe('compression', function () {
   })
 })
 
-describe('.fileServer.send()', function () {
-  it('should send a file', function (done) {
-    app.use(function* (next) {
-      if (this.request.path !== '/asdfasdf.js') return yield* next
-
-      yield* this.fileServer.send('test/file-server.js')
-    })
-
-    request(app.listen())
-    .get('/asdfasdf.js')
-    .expect('content-type', /application\/javascript/)
-    .expect(200, done)
-  })
-})
-
 describe('404s', function () {
   it('should return 404', function (done) {
-    app.use(function* (next) {
-      if (this.request.path !== '/404') return yield* next
-
-      yield* this.fileServer.send('lkjasldfjasdf.js')
+    app.use(async function (ctx, next) {
+      if (ctx.path !== '/404') return await next()
     })
 
     request(app.listen())
@@ -239,7 +222,7 @@ describe('404s', function () {
 
 describe('if .gz file is no longer existed', function () {
   it('should create it again', function (done) {
-    var app = koa()
+    var app = new Koa()
     app.use(staticServer(__dirname, {
       root: path.dirname(__dirname)
     }))

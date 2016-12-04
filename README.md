@@ -27,7 +27,8 @@ Does not support:
 ## API
 
 ```js
-var app = require('koa')()
+var Koa = require('koa')
+var app = new Koa()
 app.use(require('compress')())
 app.use(require('koa-file-server')(options))
 ```
@@ -41,36 +42,10 @@ Options are:
   - `encoding` <base64> - encoding to use
 - `index` - serve `index.html` files
 - `hidden` <false> - show hidden files which leading `.`s
-
-### var file = yield* send(this, [path])
-
-```js
-var send = require('koa-file-server')(options).send
-```
-
-`serve.send()` allows you to serve files as a utility.
-This is helpful for arbitrary paths.
-The middleware also adds `var file = yield* this.fileServer.send(path)`.
-
-`path` defaults to `this.request.path.slice(1)`,
-removing the leading `/` to make the path relative.
-
-For an example, see the middleware's source code.
-
-### var file = yield* push(this, path, [options])
-
-```js
-var push = require('koa-file-server')(options).push
-```
-
-Optionally SPDY Push a file.
-The middleware also adds `var file = yield* this.fileServer.send(path, [opts])`.
-
-Unlike `send()`, `path` is required.
-`path` must also be a relative path (without a leading `/`) relative to the `root`.
-The push stream's URL will be `'/' + path`.
-Errors will be thrown on unknown files.
-The only `option` is `priority: 7`.
+- `push` <false> - will automatically try and use server push
+- `files` [] - array of files (relative to `root`) to be server pushed
+- `pushOptions` {} - options to be passed to spdy push method (e.g. priority)
+  - The only `pushOption` is `priority: 1-7`.
 
 [npm-image]: https://img.shields.io/npm/v/koa-file-server.svg?style=flat
 [npm-url]: https://npmjs.org/package/koa-file-server

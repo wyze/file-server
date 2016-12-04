@@ -3,7 +3,7 @@ var compressible = require('compressible')
 var resolve = require('resolve-path')
 var hash = require('hash-stream')
 var mime = require('mime-types')
-var spdy = require('spdy-push')
+var spdy = require('@wyze/spdy-push')
 var assert = require('assert')
 var zlib = require('mz/zlib')
 var Path = require('path')
@@ -19,7 +19,9 @@ var notfound = {
   ENOTDIR: true,
 }
 
-module.exports = function (root, options) {
+module.exports = serve
+
+function serve(root, options) {
   if (typeof root === 'object') {
     options = root
     root = null
@@ -39,41 +41,77 @@ module.exports = function (root, options) {
   var index = options.index
   var hidden = options.hidden
 
-  // this.fileServer.send(), etc.
-  function FileServer(context) {
-    this.context = context
+  // get the file from cache if possible
+  async function get(path) {
+    var val = cache[path]
+    if (val && val.compress && (await fs.exists(val.compress.path))) return val
+
+    var stats
+
+    try {
+      stats = await fs.stat(path)
+    } catch (err) {
+      if (err = ignoreStatError(err)) throw err
+    }
+    // we don't want to cache 404s because
+    // the cache object will get infinitely large
+    if (!stats || !stats.isFile()) return
+    stats.path = path
+
+    var file = cache[path] = {
+      stats: stats,
+      etag: '"' + (await hash(path, algorithm)).toString(encoding) + '"',
+      type: mime.contentType(extname(path)) || 'application/octet-stream',
+    }
+
+    if (!compressible(file.type)) return file
+
+    // if we can compress this file, we create a .gz
+    var compress = file.compress = {
+      path: path + '.gz'
+    }
+
+    // delete old .gz files in case the file has been updated
+    try {
+      await fs.unlink(compress.path)
+    } catch (err) {}
+
+    // save to a random file name first
+    var tmp = path + '.' + random() + '.gz'
+
+    await new Promise(function (resolve, reject) {
+      fs.createReadStream(path)
+      .on('error', reject)
+      .pipe(zlib.createGzip())
+      .on('error', reject)
+      .pipe(fs.createWriteStream(tmp))
+      .on('error', reject)
+      .on('finish', resolve)
+    })
+
+    try {
+      compress.stats = await fs.stat(tmp)
+    } catch (err) {
+      if (err = ignoreStatError(err)) throw err
+    }
+
+    // if the gzip size is larger than the original file,
+    // don't bother gzipping
+    if (compress.stats.size > stats.size) {
+      delete file.compress
+      await fs.unlink(tmp)
+    } else {
+      // otherwise, rename to the correct path
+      await fs.rename(tmp, compress.path)
+    }
+
+    return file
   }
 
-  FileServer.prototype.send = function* (path) {
-    return yield* send(this.context, path)
-  }
-
-  FileServer.prototype.push = function* (path, opts) {
-    return yield* push(this.context, path, opts)
-  }
-
-  serve.send = send
-  serve.push = push
-  serve.cache = cache
-  return serve
-
-  // middleware
-  function* serve(next) {
-    this.fileServer = new FileServer(this)
-
-    yield* next
-
-    // response is handled
-    if (this.response.body) return
-    if (this.response.status !== 404) return
-
-    yield* send(this)
-  }
-
-  // utility
-  function* send(ctx, path) {
+  async function send(ctx) {
     var req = ctx.request
     var res = ctx.response
+    var path = ctx.path
 
     path = path || req.path.slice(1) || ''
 
@@ -81,13 +119,16 @@ module.exports = function (root, options) {
     var directory = path === '' || path.slice(-1) === '/'
     if (index && directory) path += 'index.html'
 
+    // make path relative
+    if (path.slice(0, 1) === '/') path = path.slice(1)
+
     // regular paths can not be absolute
     path = resolve(root, path)
 
     // hidden file support
     if (!hidden && leadingDot(path)) return
 
-    var file = yield* get(path)
+    var file = await get(path)
     if (!file) return // 404
 
     // proper method handling
@@ -132,7 +173,7 @@ module.exports = function (root, options) {
     return file
   }
 
-  function* push(ctx, path, opts) {
+  async function push(ctx, path, opts) {
     assert(path, 'you must define a path!')
     if (!ctx.res.isSpdy) return
 
@@ -148,7 +189,7 @@ module.exports = function (root, options) {
     // regular paths can not be absolute
     path = resolve(root, path)
 
-    var file = yield* get(path)
+    var file = await get(path)
     assert(file, 'can not push file: ' + uri)
 
     var options = {
@@ -176,73 +217,38 @@ module.exports = function (root, options) {
 
     spdy(ctx.res)
       .push(options)
-      .send()
       .catch(ctx.onerror)
 
     return file
   }
 
-  // get the file from cache if possible
-  function* get(path) {
-    var val = cache[path]
-    if (val && val.compress && (yield fs.exists(val.compress.path))) return val
-
-    var stats = yield fs.stat(path).catch(ignoreStatError)
-    // we don't want to cache 404s because
-    // the cache object will get infinitely large
-    if (!stats || !stats.isFile()) return
-    stats.path = path
-
-    var file = cache[path] = {
-      stats: stats,
-      etag: '"' + (yield hash(path, algorithm)).toString(encoding) + '"',
-      type: mime.contentType(extname(path)) || 'application/octet-stream',
+  // middleware
+  return async function serve(ctx, next) {
+    // should we push?
+    // needs to happen before next() so headers aren't set
+    if (options.push && ctx.path === '/') {
+      // Refactor
+      options.files.forEach(async function(file) {
+        try {
+          await push(ctx, file, options.pushOptions)
+        } catch (err) {
+          ctx.status = err.statusCode || err.status || 500
+        }
+      })
     }
 
-    if (!compressible(file.type)) return file
+    await next()
 
-    // if we can compress this file, we create a .gz
-    var compress = file.compress = {
-      path: path + '.gz'
-    }
+    if (ctx.body != null || ctx.status != 404) return
 
-    // delete old .gz files in case the file has been updated
-    try {
-      yield fs.unlink(compress.path)
-    } catch (err) {}
-
-    // save to a random file name first
-    var tmp = path + '.' + random() + '.gz'
-    yield function (done) {
-      fs.createReadStream(path)
-      .on('error', done)
-      .pipe(zlib.createGzip())
-      .on('error', done)
-      .pipe(fs.createWriteStream(tmp))
-      .on('error', done)
-      .on('finish', done)
-    }
-
-    compress.stats = yield fs.stat(tmp).catch(ignoreStatError)
-
-    // if the gzip size is larger than the original file,
-    // don't bother gzipping
-    if (compress.stats.size > stats.size) {
-      delete file.compress
-      yield fs.unlink(tmp)
-    } else {
-      // otherwise, rename to the correct path
-      yield fs.rename(tmp, compress.path)
-    }
-
-    return file
+    return await send(ctx)
   }
 }
 
 function ignoreStatError(err) {
   if (notfound[err.code]) return
   err.status = 500
-  throw err
+  return err
 }
 
 function leadingDot(path) {
