@@ -170,6 +170,8 @@ function serve(root, options) {
       res.body = fs.createReadStream(path)
     }
 
+    res.set('Vary', 'Accept-Encoding')
+
     return file
   }
 
@@ -214,6 +216,8 @@ function serve(root, options) {
       headers['content-length'] = file.stats.size
       options.filename = path
     }
+
+    headers['vary'] = 'Accept-Encoding'
 
     spdy(ctx.res)
       .push(options)

@@ -112,6 +112,13 @@ describe('headers', function () {
     .expect('cache-control', 'public, max-age=1')
     .expect(200, done)
   })
+
+  it('should set vary with Accept-Encoding', function (done) {
+    request(server)
+    .get('/test/file-server.js')
+    .expect('vary', 'Accept-Encoding')
+    .expect(200, done)
+  })
 })
 
 describe('non-files', function (done) {
