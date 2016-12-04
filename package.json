@@ -10,7 +10,7 @@
   },
   "repository": "koajs/file-server",
   "dependencies": {
-    "@wyze/spdy-push": "^2.0.0",
+    "@wyze/spdy-push": "^2.0.1",
     "compressible": "^2.0.9",
     "debug": "*",
     "hash-stream": "^1.2.0",

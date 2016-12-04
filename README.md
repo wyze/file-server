@@ -46,6 +46,7 @@ Options are:
 - `files` [] - array of files (relative to `root`) to be server pushed
 - `pushOptions` {} - options to be passed to spdy push method (e.g. priority)
   - The only `pushOption` is `priority: 1-7`.
+- `link` <false> - will set link headers based on `files` option
 
 [npm-image]: https://img.shields.io/npm/v/koa-file-server.svg?style=flat
 [npm-url]: https://npmjs.org/package/koa-file-server

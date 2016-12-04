@@ -19,6 +19,25 @@ var notfound = {
   ENOTDIR: true,
 }
 
+/**
+ * Map of file extension to request type.
+ * See https://fetch.spec.whatwg.org/#concept-request-type
+ * See https://github.com/GoogleChrome/http2-push-manifest/blob/master/lib/manifest.js#L30
+ */
+var extensiontotype = {
+  '.css': 'style',
+  '.gif': 'image',
+  '.html': 'document',
+  '.png': 'image',
+  '.jpg': 'image',
+  '.js': 'script',
+  '.json': 'script',
+  '.svg': 'image',
+  '.webp': 'image',
+  '.woff': 'font',
+  '.woff2': 'font'
+};
+
 module.exports = serve
 
 function serve(root, options) {
@@ -239,6 +258,16 @@ function serve(root, options) {
           ctx.status = err.statusCode || err.status || 500
         }
       })
+    }
+
+    // set Link headers
+    if (options.link && ctx.path === '/') {
+      ctx.set('Link', options.files.map(function (file) {
+        var ext = file.split('.').pop()
+        var type = extensiontotype['.' + ext]
+
+        return '</' + file + '>; rel=preload; as=' + type
+      }).join(', '))
     }
 
     await next()
