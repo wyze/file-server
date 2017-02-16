@@ -242,6 +242,8 @@ function serve(root, options) {
       .push(options)
       .catch(ctx.onerror)
 
+    ctx.app.emit('push', options)
+
     return file
   }
 
@@ -249,25 +251,48 @@ function serve(root, options) {
   return async function serve(ctx, next) {
     // should we push?
     // needs to happen before next() so headers aren't set
-    if (options.push && ctx.path === '/') {
-      // Refactor
-      options.files.forEach(async function(file) {
-        try {
-          await push(ctx, file, options.pushOptions)
-        } catch (err) {
-          ctx.status = err.statusCode || err.status || 500
+    if (ctx.path === '/') {
+      var files = []
+      var manifest = {}
+
+      if (options.manifest) {
+        var manifestFile = normalizePath(options.manifest)
+
+        if (await fs.exists(manifestFile)) {
+          manifest = JSON.parse(
+            await fs.readFile(manifestFile, { encoding: 'utf8' })
+          )
         }
-      })
-    }
 
-    // set Link headers
-    if (options.link && ctx.path === '/') {
-      ctx.set('Link', options.files.map(function (file) {
-        var ext = file.split('.').pop()
-        var type = extensiontotype['.' + ext]
+        files = Object.keys(manifest)
+      }
 
-        return '</' + file + '>; rel=preload; as=' + type
-      }).join(', '))
+      if (options.files) {
+        files = options.files
+      }
+
+      if (options.push && files.length) {
+        files.forEach(async function(file) {
+          var normalized = normalizePath(file)
+          try {
+            await push(ctx, normalized, options.pushOptions)
+          } catch (err) {
+            ctx.status = err.statusCode || err.status || 500
+          }
+        })
+      }
+
+      // set Link headers
+      if (options.link && files.length) {
+        ctx.set('Link', files.map(function (file) {
+          var normalized = normalizePath(file)
+          var ext = file.split('.').pop()
+          var type = (manifest[file] && manifest[file].type) ||
+            extensiontotype['.' + ext]
+
+          return '</' + normalized + '>; rel=preload; as=' + type
+        }).join(', '))
+      }
     }
 
     await next()
@@ -276,6 +301,10 @@ function serve(root, options) {
 
     return await send(ctx)
   }
+}
+
+function normalizePath(path) {
+  return path.startsWith('/') ? path.slice(1) : path
 }
 
 function ignoreStatError(err) {

@@ -1,0 +1,10 @@
+{
+  "/test/file-server.js": {
+    "type": "script",
+    "weight": 1
+  },
+  "/test/index.html": {
+    "type": "document",
+    "weight": 1
+  }
+}

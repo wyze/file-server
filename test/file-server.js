@@ -119,6 +119,36 @@ describe('headers', function () {
     .expect('vary', 'Accept-Encoding')
     .expect(200, done)
   })
+
+  it('should set link headers with files option', function (done) {
+    var app = new Koa()
+    app.use(staticServer({
+      link: true,
+      files: [
+        '/test/file-server.js',
+      ]
+    }))
+    var server = app.listen()
+
+    request(server)
+    .get('/')
+    .expect('Link', '</test/file-server.js>; rel=preload; as=script')
+    .expect(404, done)
+  })
+
+  it('should set link headers with manifest option', function (done) {
+    var app = new Koa()
+    app.use(staticServer({
+      link: true,
+      manifest: '/test/push_manifest.json'
+    }))
+    var server = app.listen()
+
+    request(server)
+    .get('/')
+    .expect('Link', '</test/file-server.js>; rel=preload; as=script, </test/index.html>; rel=preload; as=document')
+    .expect(404, done)
+  })
 })
 
 describe('non-files', function (done) {
