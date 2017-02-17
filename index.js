@@ -256,8 +256,6 @@ function serve(root, options) {
       var manifest = {}
 
       if (options.manifest) {
-        var manifestFile = normalizePath(options.manifest)
-
         if (await fs.exists(manifestFile)) {
           manifest = JSON.parse(
             await fs.readFile(manifestFile, { encoding: 'utf8' })
