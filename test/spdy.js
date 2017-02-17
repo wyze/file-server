@@ -39,7 +39,7 @@ describe('spdy push', function () {
   })
 
   it('should read from manifest', async function () {
-    var res = await request('', '/test/push_manifest.json')
+    var res = await request('', path.resolve('test/push_manifest.json'))
     res.path.should.equalOneOf(['/test/index.html', '/test/file-server.js'])
   })
 })

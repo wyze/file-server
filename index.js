@@ -256,9 +256,9 @@ function serve(root, options) {
       var manifest = {}
 
       if (options.manifest) {
-        if (await fs.exists(manifestFile)) {
+        if (await fs.exists(options.manifest)) {
           manifest = JSON.parse(
-            await fs.readFile(manifestFile, { encoding: 'utf8' })
+            await fs.readFile(options.manifest, { encoding: 'utf8' })
           )
         }
 

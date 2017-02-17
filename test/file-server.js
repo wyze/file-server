@@ -140,7 +140,7 @@ describe('headers', function () {
     var app = new Koa()
     app.use(staticServer({
       link: true,
-      manifest: '/test/push_manifest.json'
+      manifest: path.resolve('test/push_manifest.json')
     }))
     var server = app.listen()
 
